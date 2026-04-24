@@ -107,6 +107,9 @@ async def inventory(interaction: discord.Interaction):
 
 @tree.command(name="roll", description="Roll a dice")
 async def roll(interaction: discord.Interaction, sides: int = 20):
+    if sides < 1:
+        await interaction.response.send_message("Sides must be >= 1.", ephemeral=True)
+        return
     result = random.randint(1, sides)
     await interaction.response.send_message(f"🎲 Rolled a D{sides}: **{result}**")
 
@@ -124,8 +127,7 @@ async def status(interaction: discord.Interaction):
     
     if interaction.user.id in camp['players']:
         p = camp['players'][interaction.user.id]
-        char_info = f"**{p['name']}** ({p['class']})
-HP: {p['stats']['HP']}"
+        char_info = f"**{p['name']}** ({p['class']})\nHP: {p['stats']['HP']}"
         embed.add_field(name="Your Character", value=char_info, inline=False)
         
     await interaction.response.send_message(embed=embed)
