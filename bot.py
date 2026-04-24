@@ -104,6 +104,7 @@ async def inventory(interaction: discord.Interaction):
     
     embed = discord.Embed(title=f"{player['name']}'s Inventory", description=items, color=discord.Color.gold())
     await interaction.response.send_message(embed=embed)
+
 @tree.command(name="roll", description="Roll a dice")
 async def roll(interaction: discord.Interaction, sides: int = 20):
     result = random.randint(1, sides)
@@ -131,4 +132,7 @@ HP: {p['stats']['HP']}"
 
 # Bot token
 TOKEN = os.environ.get('DISCORD_TOKEN')
-client.run(TOKEN)
+if TOKEN:
+    client.run(TOKEN)
+else:
+    print("Error: DISCORD_TOKEN not found in environment.")
