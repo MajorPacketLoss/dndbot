@@ -39,7 +39,7 @@ async def start_campaign(interaction: discord.Interaction, setting: str = "Medie
         await interaction.response.send_message("❌ I need the 'Create Public Threads' permission to start a campaign!", ephemeral=True)
         return
 
-    # Defer response since thread creation might take a moment
+    # Defer response
     await interaction.response.defer()
 
     try:
