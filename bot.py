@@ -34,107 +34,105 @@ async def start_campaign(interaction: discord.Interaction, setting: str = "Medie
         await interaction.response.send_message("A campaign is already running!", ephemeral=True)
         return
     
-    # Create thread
-    thread_name = f"Campaign: {setting} ({difficulty})"
-    thread = await interaction.channel.create_thread(name=thread_name, auto_archive_duration=60)
-    
-    campaigns[guild_id] = {
-        'active': True,
-        'dm_id': interaction.user.id,
-        'thread_id': thread.id,
-        'setting': setting,
-        'difficulty': difficulty,
-        'players': {},
-        'enemies': [],
-        'in_combat': False
-    }
-    
-    embed = discord.Embed(title="New Campaign Started!", color=discord.Color.purple())
-    embed.add_field(name="Setting", value=setting, inline=True)
-    embed.add_field(name="Difficulty", value=difficulty, inline=True)
-    embed.description = f"The adventure begins in <#{thread.id}>!"
-    
-    await interaction.response.send_message(embed=embed)
-    await thread.send(f"Welcome adventurers! This is a {difficulty} {setting} campaign. Use `/create_character` to begin.")
+    # Check permissions
+    if not interaction.guild.me.guild_permissions.create_public_threads:
+        await interaction.response.send_message("❌ I need the 'Create Public Threads' permission to start a campaign!", ephemeral=True)
+        return
 
-@tree.command(name="create_character", description="Create your character for the current campaign")
-@app_commands.describe(name="Character name", character_class="Character class")
-async def create_character(interaction: discord.Interaction, name: str, character_class: str):
+    # Defer response since thread creation might take a moment
+    await interaction.response.defer()
+
+    try:
+        # Create thread
+        thread_name = f"Campaign: {setting} ({difficulty})"
+        thread = await interaction.channel.create_thread(name=thread_name, auto_archive_duration=60)
+        
+        campaigns[guild_id] = {
+            'active': True,
+            'dm_id': interaction.user.id,
+            'thread_id': thread.id,
+            'setting': setting,
+            'difficulty': difficulty,
+            'players': {},
+            'enemies': [],
+            'in_combat': False,
+            'turn_order': [],
+            'current_turn_index': 0,
+            'last_activity': datetime.now()
+        }
+        
+        embed = discord.Embed(title="⚔️ New Campaign Started!", color=discord.Color.purple())
+        embed.add_field(name="Theme", value=setting, inline=True)
+        embed.add_field(name="Difficulty", value=difficulty, inline=True)
+        embed.description = f"The adventure begins in <#{thread.id}>!
+
+**Players:** Join by using `/create_character` inside the thread."
+        
+        await interaction.followup.send(embed=embed)
+        await thread.send(f"🌌 **Welcome to the {setting} Campaign!**
+Difficulty: {difficulty}
+
+Players, please create your characters to begin. The DM (<@{interaction.user.id}>) will decide when the story advances.")
+
+    except discord.Forbidden:
+        await interaction.followup.send("❌ I don't have permission to create threads in this channel. Please check my permissions or try a different channel.")
+    except Exception as e:
+        await interaction.followup.send(f"❌ An error occurred: {str(e)}")
+
+@tree.command(name="create_character", description="Create your character for the active campaign")
+async def create_character(interaction: discord.Interaction, name: str, char_class: str):
     guild_id = interaction.guild_id
     if guild_id not in campaigns or not campaigns[guild_id]['active']:
-        await interaction.response.send_message("No active campaign!", ephemeral=True)
+        await interaction.response.send_message("No active campaign found!", ephemeral=True)
         return
-        
-    if character_class not in CLASSES:
-        await interaction.response.send_message(f"Invalid class! Choose: {', '.join(CLASSES)}", ephemeral=True)
+    
+    if interaction.channel_id != campaigns[guild_id]['thread_id']:
+        await interaction.response.send_message("Please use this command inside the campaign thread!", ephemeral=True)
         return
 
-    # Random stats
+    player_id = interaction.user.id
+    if player_id in campaigns[guild_id]['players']:
+        await interaction.response.send_message("You already have a character!", ephemeral=True)
+        return
+
+    # Basic stats
     stats = {
-        "HP": 20 if character_class == "Warrior" else 15,
-        "Strength": random.randint(10, 18),
-        "Intelligence": random.randint(10, 18),
-        "Agility": random.randint(10, 18)
+        'HP': 20,
+        'MaxHP': 20,
+        'Level': 1,
+        'XP': 0,
+        'Inventory': ["Basic Rations", "Water Skin"],
+        'Class': char_class
     }
     
-    campaigns[guild_id]['players'][interaction.user.id] = {
+    campaigns[guild_id]['players'][player_id] = {
         'name': name,
-        'class': character_class,
         'stats': stats,
-        'inventory': ["Health Potion", "Small Torch"],
-        'last_action': datetime.now()
+        'last_active': datetime.now()
     }
     
-    embed = discord.Embed(title=f"Character Created: {name}", color=discord.Color.green())
-    embed.add_field(name="Class", value=character_class)
-    for stat, val in stats.items():
-        embed.add_field(name=stat, value=val, inline=True)
-        
-    await interaction.response.send_message(embed=embed)
+    await interaction.response.send_message(f"✅ Character **{name}** the **{char_class}** has been created!")
 
-@tree.command(name="inventory", description="View your inventory")
+@tree.command(name="inventory", description="View your character's inventory")
 async def inventory(interaction: discord.Interaction):
     guild_id = interaction.guild_id
     if guild_id not in campaigns or interaction.user.id not in campaigns[guild_id]['players']:
-        await interaction.response.send_message("You don't have a character!", ephemeral=True)
+        await interaction.response.send_message("You don't have a character in this campaign!", ephemeral=True)
         return
-        
+    
     player = campaigns[guild_id]['players'][interaction.user.id]
-    items = ", ".join(player['inventory']) if player['inventory'] else "Empty"
-    
-    embed = discord.Embed(title=f"{player['name']}'s Inventory", description=items, color=discord.Color.gold())
-    await interaction.response.send_message(embed=embed)
+    items = ", ".join(player['stats']['Inventory'])
+    await interaction.response.send_message(f"🎒 **{player['name']}'s Inventory:** {items}")
 
-@tree.command(name="roll", description="Roll a dice")
-async def roll(interaction: discord.Interaction, sides: int = 20):
-    if sides < 1:
-        await interaction.response.send_message("Sides must be >= 1.", ephemeral=True)
-        return
-    result = random.randint(1, sides)
-    await interaction.response.send_message(f"🎲 Rolled a D{sides}: **{result}**")
+@tree.command(name="roll", description="Roll a dice (e.g., d20)")
+async def roll(interaction: discord.Interaction, dice: str = "1d20"):
+    try:
+        num, sides = map(int, dice.lower().split('d'))
+        results = [random.randint(1, sides) for _ in range(num)]
+        total = sum(results)
+        await interaction.response.send_message(f"🎲 Rolled {dice}: **{total}** ({results})")
+    except:
+        await interaction.response.send_message("Invalid dice format! Use something like '1d20'.", ephemeral=True)
 
-@tree.command(name="status", description="Show campaign and character status")
-async def status(interaction: discord.Interaction):
-    guild_id = interaction.guild_id
-    if guild_id not in campaigns or not campaigns[guild_id]['active']:
-        await interaction.response.send_message("No active campaign!", ephemeral=True)
-        return
-        
-    camp = campaigns[guild_id]
-    embed = discord.Embed(title="Campaign Status", color=discord.Color.blue())
-    embed.add_field(name="Setting", value=camp['setting'])
-    embed.add_field(name="Difficulty", value=camp['difficulty'])
-    
-    if interaction.user.id in camp['players']:
-        p = camp['players'][interaction.user.id]
-        char_info = f"**{p['name']}** ({p['class']})\nHP: {p['stats']['HP']}"
-        embed.add_field(name="Your Character", value=char_info, inline=False)
-        
-    await interaction.response.send_message(embed=embed)
-
-# Bot token
-TOKEN = os.environ.get('DISCORD_TOKEN')
-if TOKEN:
-    client.run(TOKEN)
-else:
-    print("Error: DISCORD_TOKEN not found in environment.")
+# Keep bot running
+client.run(os.getenv('DISCORD_TOKEN'))
