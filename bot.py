@@ -38,10 +38,8 @@ async def start_campaign(interaction: discord.Interaction, setting: str = "Medie
     if not interaction.guild.me.guild_permissions.create_public_threads:
         await interaction.response.send_message("❌ I need the 'Create Public Threads' permission to start a campaign!", ephemeral=True)
         return
-
     # Defer response
     await interaction.response.defer()
-
     try:
         # Create thread
         thread_name = f"Campaign: {setting} ({difficulty})"
@@ -64,16 +62,10 @@ async def start_campaign(interaction: discord.Interaction, setting: str = "Medie
         embed = discord.Embed(title="⚔️ New Campaign Started!", color=discord.Color.purple())
         embed.add_field(name="Theme", value=setting, inline=True)
         embed.add_field(name="Difficulty", value=difficulty, inline=True)
-        embed.description = f"The adventure begins in <#{thread.id}>!
-
-**Players:** Join by using `/create_character` inside the thread."
+        embed.description = f"The adventure begins in <#{thread.id}>!\n\n**Players:** Join by using `/create_character` inside the thread."
         
         await interaction.followup.send(embed=embed)
-        await thread.send(f"🌌 **Welcome to the {setting} Campaign!**
-Difficulty: {difficulty}
-
-Players, please create your characters to begin. The DM (<@{interaction.user.id}>) will decide when the story advances.")
-
+        await thread.send(f"🌌 **Welcome to the {setting} Campaign!**\nDifficulty: {difficulty}\n\nPlayers, please create your characters to begin. The DM (<@{interaction.user.id}>) will decide when the story advances.")
     except discord.Forbidden:
         await interaction.followup.send("❌ I don't have permission to create threads in this channel. Please check my permissions or try a different channel.")
     except Exception as e:
@@ -89,12 +81,10 @@ async def create_character(interaction: discord.Interaction, name: str, char_cla
     if interaction.channel_id != campaigns[guild_id]['thread_id']:
         await interaction.response.send_message("Please use this command inside the campaign thread!", ephemeral=True)
         return
-
     player_id = interaction.user.id
     if player_id in campaigns[guild_id]['players']:
         await interaction.response.send_message("You already have a character!", ephemeral=True)
         return
-
     # Basic stats
     stats = {
         'HP': 20,
